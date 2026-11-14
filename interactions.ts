@@ -156,14 +156,45 @@ async function completeRecords(interaction: Interaction, trackId: string) {
   }
 }
 
+// Reuse complete search results while the user continues typing.
+// A 25-result response may be truncated, so it cannot answer a narrower search.
+const searchCache = new Map<string, { tracks: Track[]; expires: number }>();
+const pendingSearches = new Map<string, Promise<Track[]>>();
+
+async function searchTracks(term: string): Promise<Track[]> {
+  const cached = searchCache.get(term);
+  if (cached && cached.expires > Date.now()) return cached.tracks;
+  for (const [prefix, entry] of searchCache) {
+    if (entry.expires > Date.now() && entry.tracks.length < 25 && term.startsWith(prefix)) {
+      return entry.tracks.filter((track) =>
+        track.name.toLowerCase().includes(term) || (track.city ?? '').toLowerCase().includes(term));
+    }
+  }
+  const pending = pendingSearches.get(term);
+  if (pending) return pending;
+
+  const request = query<Track[]>(new URLSearchParams({ search: term }))
+    .then((tracks) => {
+      searchCache.delete(term);
+      searchCache.set(term, { tracks, expires: Date.now() + 5 * 60_000 });
+      if (searchCache.size > 200) searchCache.delete(searchCache.keys().next().value!);
+      return tracks;
+    })
+    .finally(() => pendingSearches.delete(term));
+  pendingSearches.set(term, request);
+  return request;
+}
+
 async function autocomplete(search: string) {
+  const term = search.slice(0, 80).replace(/[^\p{L}\p{M}\p{N} -]/gu, '').trim().toLowerCase();
   try {
-    const tracks = await query<Track[]>(new URLSearchParams({ search }));
-    return tracks.map((track) => ({
+    const tracks = await searchTracks(term);
+    return tracks.slice(0, 25).map((track) => ({
       name: [track.name, track.city].filter(Boolean).join(' · ').slice(0, 100),
       value: track.id,
     }));
-  } catch {
+  } catch (error) {
+    console.error('Circuit autocomplete failed', error instanceof Error ? error.message : 'Unknown error');
     return [];
   }
 }
