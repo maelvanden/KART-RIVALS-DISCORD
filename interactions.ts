@@ -10,6 +10,16 @@ type Interaction = {
 type Track = { id: string; name: string; city: string | null };
 type Lap = { position: number; username: string; lap_ms: number };
 
+type Embed = {
+  color: number;
+  author: { name: string };
+  title: string;
+  description: string;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  footer?: { text: string };
+  timestamp?: string;
+};
+
 const ephemeral = 64;
 const encoder = new TextEncoder();
 const snowflake = /^\d{17,20}$/;
@@ -59,26 +69,74 @@ function formatLap(ms: number) {
   return minutes + ':' + seconds + '.' + String(ms % 1000).padStart(3, '0');
 }
 
+function notice(title: string, description: string): Embed {
+  return { color: 0xf59e0b, author: { name: 'KART RIVALS' }, title, description };
+}
+
 function reply(content: string) {
-  return Response.json({ type: 4, data: { content, flags: ephemeral, allowed_mentions: { parse: [] } } });
+  return Response.json({
+    type: 4,
+    data: {
+      embeds: [notice('🏁 Avant de prendre la piste', content)],
+      flags: ephemeral,
+      allowed_mentions: { parse: [] },
+    },
+  });
+}
+
+function recordsEmbed(track: Track, laps: Lap[]): Embed {
+  const results = [...laps].sort((a, b) => a.lap_ms - b.lap_ms).slice(0, 10);
+  const embed: Embed = {
+    color: 0xfacc15,
+    author: { name: 'KART RIVALS • RECORDS' },
+    title: '🏁 ' + displayText(track.name, 100),
+    description: track.city ? '📍 ' + displayText(track.city, 100) : 'Les meilleurs tours du circuit.',
+    footer: { text: 'Chronos de match validés • Kart Rivals' },
+    timestamp: new Date().toISOString(),
+  };
+  if (!results.length) {
+    embed.fields = [{
+      name: '⏱️ Le record reste à établir',
+      value: 'Aucun chrono de match validé pour le moment.\nPrends la piste et signe le premier temps !',
+    }];
+    return embed;
+  }
+
+  const best = results[0];
+  const medals = ['🥇', '🥈', '🥉'];
+  const rows = results.map((lap) => {
+    const badge = medals[lap.position - 1] ?? '**' + lap.position + '.**';
+    const gap = lap.lap_ms === best.lap_ms
+      ? 'Record'
+      : '+' + ((lap.lap_ms - best.lap_ms) / 1000).toFixed(3) + ' s';
+    return badge + ' **' + displayText(lap.username, 50) + '**\n' +
+      '↳ `' + formatLap(lap.lap_ms) + '` · ' + gap;
+  });
+  embed.fields = [
+    { name: '⏱️ Temps de référence', value: '`' + formatLap(best.lap_ms) + '`', inline: true },
+    { name: '🏆 Classement', value: 'Top ' + results.length, inline: true },
+    { name: '🏎️ Les meilleurs tours', value: rows.slice(0, 5).join('\n\n') },
+  ];
+  if (rows.length > 5) {
+    embed.fields.push({ name: 'Suite du classement', value: rows.slice(5).join('\n\n') });
+  }
+  return embed;
 }
 
 async function completeRecords(interaction: Interaction, trackId: string) {
-  let content: string;
+  let embed: Embed;
   try {
     const { track, laps } = await query<{ track: Track | null; laps: Lap[] }>(
       new URLSearchParams({ track: trackId }),
     );
-    if (!track) {
-      content = 'Circuit introuvable. Choisis un circuit dans les suggestions.';
-    } else {
-      const heading = '**Records · ' + displayText(track.name, 100) + '**';
-      const rows = laps.map((lap) =>
-        lap.position + '. `' + formatLap(lap.lap_ms) + '` · ' + displayText(lap.username, 50));
-      content = [heading, ...(rows.length ? rows : ['Aucun chrono de match validé sur ce circuit.'])].join('\n');
-    }
+    embed = track
+      ? recordsEmbed(track, laps)
+      : notice('🔎 Circuit introuvable', 'Relance `/records` et choisis un circuit dans les suggestions.');
   } catch {
-    content = 'Le classement Kart Rivals est momentanément indisponible. Réessaie dans un instant.';
+    embed = notice(
+      '🔧 Arrêt aux stands',
+      'Le classement est momentanément indisponible. Réessaie dans un instant.',
+    );
   }
 
   try {
@@ -88,7 +146,7 @@ async function completeRecords(interaction: Interaction, trackId: string) {
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({ content: '', embeds: [embed], allowed_mentions: { parse: [] } }),
         signal: AbortSignal.timeout(5000),
       },
     );
