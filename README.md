@@ -10,7 +10,7 @@ personne qui utilise la commande.
    Active **Guild Install**, ajoute les scopes `bot` et `applications.commands`, puis
    installe l’application sur ton serveur. Copie **Application ID**, **Public Key**,
    l’ID du serveur et l’ID du salon de test.
-2. Déploie [l’API Kart Rivals](https://github.com/maelvanden/KART-RIVALS/blob/discord-records/docs/discord-records.md).
+2. Déploie [l’API Kart Rivals](https://github.com/maelvanden/KART-RIVALS/blob/main/docs/discord-records.md).
    Renseigne sa clé dédiée et son URL ainsi que les valeurs Discord dans l’environnement
    du service. Utilise `.env.local` pour les tests locaux et `.env.example` comme modèle.
 3. Héberge le service avec Node.js 24 et une URL HTTPS. Lance le processus avec
@@ -19,3 +19,34 @@ personne qui utilise la commande.
 4. Ajoute temporairement `DISCORD_BOT_TOKEN` à ton environnement local, puis lance
    `node --env-file=.env.local register-discord-records.mjs`.
 5. Dans le salon de test, compare `/records` au classement du même circuit dans Kart Rivals.
+
+## Commandes disponibles
+
+| Commande | Paramètres | Résultat |
+| --- | --- | --- |
+| `/records` | circuit | Top 10 des chronos validés |
+| `/profil` | pilote | Elo, bilan des matchs, jusqu’à 5 records personnels |
+| `/classement` | aucun | Top 10 Elo des pilotes publics ayant joué un match |
+| `/circuit` | circuit | Ville, adresse, longueur, site officiel et record |
+| `/comparaison` | pilote1, pilote2, circuit | Meilleurs chronos sur le même circuit et écart |
+
+Les pilotes se sélectionnent par leur **pseudo Kart Rivals**, avec autocomplétion.
+Les profils non découvrables, bannis et de démonstration sont exclus de la recherche,
+des fiches, du classement et de la comparaison. Les réponses restent privées et limitées
+au serveur/salon de test configurés. Aucun chrono manquant n’est inventé.
+Les records utilisent les mêmes sources validées que l’application ; la comparaison
+ne garantit pas les mêmes conditions de roulage entre deux sessions.
+
+## Mise à jour depuis un téléphone (FadeHost)
+
+1. Déployer d’abord la nouvelle fonction Supabase `discord-data` (workflow du dépôt de l’application).
+2. Dans les variables FadeHost, renseigner `DISCORD_APPLICATION_ID`, `DISCORD_GUILD_ID`
+   et `DISCORD_BOT_TOKEN` (le jeton du bot depuis le portail Discord, jamais la clé publique).
+   Conserver les autres variables existantes, notamment `DISCORD_TEST_CHANNEL_ID`.
+3. Redéployer la dernière version de `main`. Si le token est présent, le serveur
+   enregistre les cinq commandes au démarrage. Les logs confirment chaque commande.
+4. Tester dans le salon configuré. Le token peut ensuite être retiré : il sert uniquement
+   à enregistrer les commandes. Sans token, les commandes déjà enregistrées continuent de fonctionner.
+
+L’ancien script `node register-discord-records.mjs` enregistre désormais les cinq commandes.
+Il met à jour chacune d’elles sans supprimer les autres commandes éventuelles du serveur.

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { registerCommands } from './commands.mjs';
 import { handleInteraction } from './interactions.ts';
 
 const port = Number(process.env.PORT ?? 3000);
@@ -39,3 +40,9 @@ createServer(async (incoming, outgoing) => {
     outgoing.writeHead(500).end();
   }
 }).listen(port, '0.0.0.0', () => console.log('Kart Rivals Discord · port ' + port));
+
+// Optional: install/update slash commands after deployment without a local terminal.
+// Missing token does not prevent the HTTP interactions server from running.
+if (process.env.DISCORD_BOT_TOKEN) {
+  void registerCommands().catch((error) => console.error('Command registration failed:', error.message));
+}
