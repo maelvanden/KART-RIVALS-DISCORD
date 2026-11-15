@@ -1,6 +1,6 @@
 import { REST, Routes, PermissionFlagsBits as P } from 'discord.js';
 
-const kinds = { chrono: '🏁 Chrono suspect', bug: '🐛 Signaler un bug', staff: '💬 Contacter le staff' };
+const kinds = { chrono: '🏁 Chrono suspect', bug: '🐛 Signaler un bug', staff: '💬 Contacter le staff', partenariat: '🤝 Demande de partenariat' };
 const id = /^\d{17,20}$/;
 const reply = (content) => Response.json({ type: 4, data: { content, flags: 64, allowed_mentions: { parse: [] } } });
 const button = (custom_id, label, style = 2) => ({ type: 2, custom_id, label, style });
@@ -59,24 +59,24 @@ export function createTicketRouter({ env = process.env, rest, log = console } = 
         await api.post(Routes.channelMessages(i.channel_id), { body: {
           allowed_mentions: { parse: [] },
           embeds: [{ color: 0xdfff00, title: '🎫 Assistance Kart Rivals',
-            description: 'Un chrono suspect, un bug ou une question ?\nChoisis un motif pour ouvrir un ticket privé avec le staff.\n\nUn seul ticket ouvert par personne. Les administrateurs ont également accès aux tickets.',
+            description: 'Un chrono suspect, un bug, une question ou un partenariat ?\nChoisis un motif pour ouvrir un ticket privé avec le staff.\n\nUn seul ticket ouvert par personne. Les administrateurs ont également accès aux tickets.',
             footer: { text: 'Kart Rivals • On est là pour t’aider' } }],
           components: [row(...Object.entries(kinds).map(([key, label]) => button('kr-ticket:new:' + key + ':' + role, label)))],
         } });
         return 'Panneau publié ! Le rôle <@&' + role + '> aura accès aux nouveaux tickets.';
       });
     }
-    const open = /^kr-ticket:new:(chrono|bug|staff):(\d{17,20})$/.exec(custom);
+    const open = /^kr-ticket:new:(chrono|bug|staff|partenariat):(\d{17,20})$/.exec(custom);
     if (i.type === 3 && open) {
       if (i.message?.author?.id !== i.application_id) return reply('Utilise le panneau officiel du bot.');
       return Response.json({ type: 9, data: {
         custom_id: 'kr-ticket:submit:' + open[1] + ':' + open[2], title: kinds[open[1]],
         components: [row({ type: 4, custom_id: 'details', label: 'Décris ta demande', style: 2,
-          placeholder: open[1] === 'chrono' ? 'Circuit, pilote, chrono concerné et raison du signalement…' : 'Explique ce qui se passe. Tu pourras ajouter des captures dans le ticket.',
+          placeholder: open[1] === 'partenariat' ? 'Présente ton projet ou serveur, son lien, ta communauté et le partenariat proposé.' : open[1] === 'chrono' ? 'Circuit, pilote, chrono concerné et raison du signalement…' : 'Explique ce qui se passe. Tu pourras ajouter des captures dans le ticket.',
           min_length: 10, max_length: 2000, required: true })],
       } });
     }
-    const submit = /^kr-ticket:submit:(chrono|bug|staff):(\d{17,20})$/.exec(custom);
+    const submit = /^kr-ticket:submit:(chrono|bug|staff|partenariat):(\d{17,20})$/.exec(custom);
     if (i.type === 5 && submit) {
       const details = i.data.components?.flatMap((r) => r.components ?? []).find((c) => c.custom_id === 'details')?.value;
       if (typeof details !== 'string' || details.trim().length < 10 || details.length > 2000 || submit[2] === i.guild_id) return reply('Décris ta demande en 10 à 2000 caractères.');

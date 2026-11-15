@@ -117,7 +117,7 @@ Le vrai avatar est téléchargé au moment où le membre rejoint le serveur.
 
 Après déploiement, un administrateur utilise `/tickets staff:@Staff` dans le salon textuel où publier le panneau. Choisir un rôle réservé aux personnes autorisées à lire les demandes : ne pas utiliser un rôle communautaire. Aucun nouvel identifiant d’environnement n’est nécessaire. Les tickets fonctionnent dans le serveur configuré, indépendamment du salon de test des commandes de chronos.
 
-Les boutons **Chrono suspect**, **Signaler un bug**, **Contacter le staff** ouvrent un formulaire puis un salon privé. Le membre peut y ajouter ses captures. Les autorisations sont définies dès la création : membre, rôle staff sélectionné et bot ; les administrateurs Discord ont également accès. Un seul ticket ouvert par membre ; l’état est conservé dans le sujet du salon, y compris après redémarrage (ne pas modifier ce sujet).
+Les boutons **Chrono suspect**, **Signaler un bug**, **Contacter le staff** et **Demande de partenariat** ouvrent un formulaire puis un salon privé. Le membre peut y ajouter ses captures. Les autorisations sont définies dès la création : membre, rôle staff sélectionné et bot ; les administrateurs Discord ont également accès. Un seul ticket ouvert par membre ; l’état est conservé dans le sujet du salon, y compris après redémarrage (ne pas modifier ce sujet).
 
 Le bouton **Fermer le ticket** ou `/fermer-ticket` demande confirmation. Seuls l’auteur, le rôle staff sélectionné et les administrateurs peuvent fermer. La fermeture conserve les messages et rend le salon accessible en lecture au demandeur. Le staff peut ensuite supprimer le salon manuellement selon sa politique de conservation. Aucun export ou envoi de transcript externe n’est effectué.
 
