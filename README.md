@@ -29,6 +29,11 @@ personne qui utilise la commande.
 | `/classement` | aucun | Top 10 Elo des pilotes publics ayant joué un match |
 | `/circuit` | circuit | Ville, adresse, longueur, site officiel et record |
 | `/comparaison` | pilote1, pilote2, circuit | Meilleurs chronos sur le même circuit et écart |
+| `/mesrecords` | pilote, page facultative | Tous les records personnels, 10 circuits par page |
+| `/rival` | pilote, circuit | Prochain chrono strictement meilleur parmi les pilotes publics |
+| `/dernierschronos` | aucun | 10 derniers chronos validés de pilotes publics, toutes sources |
+| `/circuits` | ville, page facultative | Recherche partielle par ville, 10 circuits par page |
+| `/aide` | aucun | Commandes et mode d’emploi |
 
 Les pilotes se sélectionnent par leur **pseudo Kart Rivals**, avec autocomplétion.
 Les profils non découvrables, bannis et de démonstration sont exclus de la recherche,
@@ -44,9 +49,21 @@ ne garantit pas les mêmes conditions de roulage entre deux sessions.
    et `DISCORD_BOT_TOKEN` (le jeton du bot depuis le portail Discord, jamais la clé publique).
    Conserver les autres variables existantes, notamment `DISCORD_TEST_CHANNEL_ID`.
 3. Redéployer la dernière version de `main`. Si le token est présent, le serveur
-   enregistre les cinq commandes au démarrage. Les logs confirment chaque commande.
+   enregistre les dix commandes au démarrage. Les logs confirment chaque commande.
 4. Tester dans le salon configuré. Le token peut ensuite être retiré : il sert uniquement
    à enregistrer les commandes. Sans token, les commandes déjà enregistrées continuent de fonctionner.
 
-L’ancien script `node register-discord-records.mjs` enregistre désormais les cinq commandes.
+L’ancien script `node register-discord-records.mjs` enregistre désormais les dix commandes.
 Il met à jour chacune d’elles sans supprimer les autres commandes éventuelles du serveur.
+
+`/mesrecords` et `/rival` demandent un pseudo Kart Rivals : aucun compte Discord
+n’est automatiquement lié. `/rival` ignore les ex æquo et choisit un seul pilote
+si plusieurs personnes détiennent le prochain temps à battre. Il ne se limite pas au top 10.
+Les profils privés, bannis et de démonstration ne sont pas affichés dans les nouvelles commandes.
+`/dernierschronos` trie par date de validation, pas par date de roulage.
+
+Pour poursuivre une liste, relancer la même commande avec `page:2`, puis 3, etc.
+Le pied de l’embed indique s’il reste une page. Les commandes gardent leurs réponses privées.
+
+La migration `20261223000083_discord_commands.sql` doit être appliquée avant le
+redéploiement du bot ; elle ajoute deux fonctions SQL accessibles uniquement au service backend.

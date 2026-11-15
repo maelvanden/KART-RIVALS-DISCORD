@@ -102,13 +102,44 @@ test('authorization, invalid input and autocomplete', async () => {
   }
   assert.equal(requests, 2, 'complete prefix cache avoids second lookup');
 });
-test('registration upserts five commands and preserves unrelated commands', async () => {
+test('registration upserts ten commands and preserves unrelated commands', async () => {
   const registered = [];
   await registerCommands({ DISCORD_APPLICATION_ID: '333333333333333333', DISCORD_GUILD_ID: '111111111111111111', DISCORD_BOT_TOKEN: 'test' }, async (url, init) => {
     assert.equal(init.method, 'POST');
     registered.push(JSON.parse(init.body));
     return Response.json({});
   });
-  assert.deepEqual(registered.map((c) => c.name), ['records', 'profil', 'classement', 'circuit', 'comparaison']);
+  assert.deepEqual(registered.map((c) => c.name), ['records', 'profil', 'classement', 'circuit', 'comparaison', 'mesrecords', 'rival', 'dernierschronos', 'circuits', 'aide']);
   for (const c of commands) assert.ok(c.description.length <= 100);
+});
+test('new commands: pagination, rivals, recent laps and help', async () => {
+  let embed = await run('mesrecords', { pilote: id, page: 2 }, { pilot, records: Array.from({ length: 10 }, () => ({ track_name: '*'.repeat(100), lap_ms: 34455, position: 14 })), has_more: true });
+  assert.equal(embed.fields.length, 10);
+  assert.match(embed.footer.text, /page:3/);
+  embed = await run('mesrecords', { pilote: id, page: 3 }, { pilot, records: [], has_more: false });
+  assert.match(JSON.stringify(embed), /page précédente/);
+  embed = await run('circuits', { ville: 'Angers' }, { city: 'Angers', tracks: [track], has_more: false });
+  assert.match(JSON.stringify(embed), /Inwall/);
+  embed = await run('circuits', { ville: 'Angers' }, { tracks: [], has_more: false });
+  assert.match(JSON.stringify(embed), /autre ville/);
+  const rival = { pilot, track, lap_ms: 35000, rival: { username: 'Other', lap_ms: 34455 } };
+  embed = await run('rival', { pilote: id, circuit: id }, rival);
+  assert.match(JSON.stringify(embed), /0.545 s/);
+  assert.match(JSON.stringify(embed), /0.546 s/);
+  embed = await run('rival', { pilote: id, circuit: id }, { ...rival, rival: null });
+  assert.match(JSON.stringify(embed), /En tête/);
+  embed = await run('rival', { pilote: id, circuit: id }, { ...rival, lap_ms: null, rival: null });
+  assert.match(JSON.stringify(embed), /Premier objectif/);
+  embed = await run('rival', { pilote: id, circuit: id }, { unavailable: true });
+  assert.match(embed.title, /indisponible/);
+  embed = await run('dernierschronos', {}, { laps: [{ username: 'Mael', track_name: 'Inwall', lap_ms: 34455, confirmed_at: '2026-11-15T12:00:00Z' }] });
+  assert.match(JSON.stringify(embed), /0:34.455/);
+  assert.match(JSON.stringify(embed), /<t:\d+:R>/);
+  embed = await run('dernierschronos', {}, { laps: [] });
+  assert.match(JSON.stringify(embed), /piste est calme/);
+  embed = await run('aide', {}, new Error('must not query API'));
+  for (const command of commands) if (command.name !== 'aide') assert.ok(JSON.stringify(embed).includes('/' + command.name));
+  global.fetch = async () => { throw new Error('should not query API'); };
+  for (const page of [0, -1, 1.2, '2', 10001]) assert.equal((await (await send('mesrecords', { pilote: id, page })).json()).type, 4);
+  assert.equal((await (await send('circuits', { ville: '*' })).json()).type, 4);
 });

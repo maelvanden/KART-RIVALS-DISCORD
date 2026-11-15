@@ -4,7 +4,7 @@ type Interaction = {
   guild_id?: string;
   channel_id?: string;
   token: string;
-  data?: { name: string; options?: { name: string; value: string; focused?: boolean }[] };
+  data?: { name: string; options?: { name: string; value: string | number; focused?: boolean }[] };
 };
 
 type Track = { id: string; name: string; city: string | null };
@@ -140,7 +140,65 @@ function pilotStats(pilot: Pilot) {
 }
 async function commandEmbed(interaction: Interaction): Promise<Embed> {
   const name = interaction.data!.name;
-  const option = (key: string) => interaction.data!.options?.find((o) => o.name === key)?.value ?? '';
+  const option = (key: string) => String(interaction.data!.options?.find((o) => o.name === key)?.value ?? '');
+  if (name === 'aide') {
+    const embed = card('AIDE', '🏁 Ton paddock Kart Rivals', 'Choisis une commande et prends la piste !');
+    embed.fields = [
+      { name: '⏱️ Chronos', value: '**/records circuit** — Top 10 du circuit.\n**/mesrecords pilote [page]** — Tous les records personnels.\n**/dernierschronos** — Les 10 derniers chronos validés publics.' },
+      { name: '⚔️ Pilotes', value: '**/profil pilote** — Statistiques et meilleurs résultats.\n**/classement** — Top 10 Elo.\n**/comparaison pilote1 pilote2 circuit** — Duel de chronos.\n**/rival pilote circuit** — Prochain temps à battre.' },
+      { name: '🗺️ Circuits', value: '**/circuit circuit** — Fiche et record du circuit.\n**/circuits ville [page]** — Recherche par ville.' },
+      { name: '💡 Mode d’emploi', value: 'Les pilotes sont recherchés par pseudo Kart Rivals. Sélectionne les suggestions. Pour les listes, ajoute **page:2**, puis 3… Les réponses sont visibles uniquement par toi dans le salon de test.' },
+    ];
+    return embed;
+  }
+  if (name === 'mesrecords' || name === 'circuits') {
+    const page = option('page') || '1';
+    const data = await query<{ pilot?: Pilot; records?: PersonalRecord[]; tracks?: Track[]; city?: string; has_more: boolean }>(
+      new URLSearchParams({ action: name, page, ...(name === 'mesrecords' ? { pilot: option('pilote') } : { city: option('ville') }) }), 8000);
+    if (name === 'mesrecords' && !data.pilot) return notice('🔎 Profil indisponible', 'Ce pilote est introuvable ou son profil n’est pas public.');
+    const embed = name === 'mesrecords'
+      ? card('MES RECORDS', '⏱️ ' + displayText(data.pilot!.username, 50), 'Les meilleurs chronos personnels, circuit par circuit.')
+      : card('CIRCUITS', '🗺️ À la recherche de ta prochaine piste', 'Ville : **' + displayText(data.city ?? option('ville'), 80) + '**');
+    embed.fields = name === 'mesrecords' ? (data.records ?? []).slice(0, 10).map((r) => ({
+      name: '🏁 ' + displayText(r.track_name, 100), value: '**`' + formatLap(r.lap_ms) + '`** · Rang circuit **#' + r.position + '**',
+    })) : (data.tracks ?? []).slice(0, 10).map((t) => ({
+      name: '🏁 ' + displayText(t.name, 100), value: '📍 ' + displayText(t.city ?? 'Ville non renseignée', 100),
+    }));
+    if (!embed.fields.length) embed.fields.push({ name: 'Aucun résultat sur cette page', value: Number(page) > 1
+      ? 'Essaie une page précédente.' : name === 'mesrecords' ? 'Ce pilote n’a pas encore de chrono validé.' : 'Essaie une autre ville ou une partie de son nom.' });
+    embed.footer = { text: 'Page ' + page + (data.has_more ? ' • Suite : relance /' + name + ' avec page:' + (Number(page) + 1) : ' • Fin des résultats') };
+    return embed;
+  }
+  if (name === 'dernierschronos') {
+    const { laps } = await query<{ laps: { username: string; track_name: string; lap_ms: number; confirmed_at: string }[] }>(
+      new URLSearchParams({ action: name }), 8000);
+    const embed = card('DERNIERS CHRONOS', '🔥 Ça roule sur Kart Rivals', 'Les 10 derniers chronos validés des pilotes publics.');
+    embed.fields = laps.slice(0, 10).map((lap) => {
+      const timestamp = Math.floor(Date.parse(lap.confirmed_at) / 1000);
+      return { name: '🏁 ' + displayText(lap.track_name, 100), value: '**' + displayText(lap.username, 50) + '** · `' + formatLap(lap.lap_ms) + '`' +
+        (Number.isFinite(timestamp) ? '\nValidé <t:' + timestamp + ':R>' : '') };
+    });
+    if (!embed.fields.length) embed.fields.push({ name: 'La piste est calme', value: 'Aucun chrono public validé pour le moment.' });
+    embed.footer = { text: 'Ordre de validation • Défis, courses et Time Attack' };
+    return embed;
+  }
+  if (name === 'rival') {
+    const data = await query<{ pilot?: { username: string }; track?: Track; lap_ms: number | null; rival?: { username: string; lap_ms: number } }>(
+      new URLSearchParams({ action: name, pilot: option('pilote'), track: option('circuit') }), 8000);
+    if (!data.pilot || !data.track) return notice('🔎 Rival indisponible', 'Le pilote ou le circuit n’est plus disponible. Sélectionne-les à nouveau.');
+    const embed = card('RIVAL', '🎯 Le prochain chrono à battre', '🏁 **' + displayText(data.track.name, 100) + '**');
+    embed.fields = [{ name: '🏎️ ' + displayText(data.pilot.username, 50), value: data.lap_ms == null
+      ? 'Aucun chrono validé sur ce circuit.' : '**`' + formatLap(data.lap_ms) + '`**' }];
+    if (data.lap_ms == null) embed.fields.push({ name: 'Premier objectif', value: 'Publie un chrono validé sur ce circuit pour trouver le prochain rival.' });
+    else if (!data.rival) embed.fields.push({ name: '🏆 En tête des pilotes publics', value: 'Aucun pilote public n’a un meilleur chrono. À toi de repousser ta limite !' });
+    else {
+      embed.fields.push({ name: '⚔️ ' + displayText(data.rival.username, 50), value: '**`' + formatLap(data.rival.lap_ms) + '`**' });
+      const gap = data.lap_ms - data.rival.lap_ms;
+      embed.fields.push({ name: '⏱️ Ton objectif', value: '**' + (gap / 1000).toFixed(3) + ' s** pour égaler ce temps.\nGagne **' + ((gap + 1) / 1000).toFixed(3) + ' s** pour le battre au millième.' });
+    }
+    embed.footer = { text: 'Prochain chrono strictement meilleur • Pilotes publics • Conditions potentiellement différentes' };
+    return embed;
+  }
   if (name === 'records' || name === 'circuit') {
     const { track, laps } = await query<{ track: Circuit | null; laps: Lap[] }>(
       new URLSearchParams({ track: option('circuit'), ...(name === 'circuit' ? { action: 'circuit' } : {}) }), 8000);
@@ -297,6 +355,7 @@ async function autocompletePilots(search: string) {
 const requiredOptions: Record<string, string[]> = {
   records: ['circuit'], circuit: ['circuit'], profil: ['pilote'], classement: [],
   comparaison: ['pilote1', 'pilote2', 'circuit'],
+  mesrecords: ['pilote'], rival: ['pilote', 'circuit'], dernierschronos: [], circuits: ['ville'], aide: [],
 };
 
 export async function handleInteraction(request: Request) {
@@ -322,15 +381,19 @@ export async function handleInteraction(request: Request) {
   const required = requiredOptions[interaction.data.name];
   const focused = options.find((option) => option.focused);
   if (interaction.type === 4) {
-    const choices = allowed && focused && typeof focused.value === 'string' && required.includes(focused.name)
+    const choices = allowed && focused && typeof focused.value === 'string' && required.includes(focused.name) && focused.name !== 'ville'
       ? await (focused.name === 'circuit' ? autocomplete(focused.value) : autocompletePilots(focused.value)) : [];
     return Response.json({ type: 8, data: { choices } });
   }
   if (!allowed) return reply('Utilise cette commande dans le salon de test Kart Rivals.');
   if (required.some((key) => {
     const value = options.find((option) => option.name === key)?.value;
-    return typeof value !== 'string' || !uuid.test(value);
+    return typeof value !== 'string' || (key === 'ville' ? value.replace(/[^\p{L}\p{M}\p{N} -]/gu, '').trim().length < 2 || value.length > 80 : !uuid.test(value));
   })) return reply('Sélectionne les pilotes et les circuits dans les suggestions.');
+  const page = options.find((o) => o.name === 'page')?.value;
+  if (page !== undefined && (typeof page !== 'number' || !Number.isInteger(page) || page < 1 || page > 10000)) {
+    return reply('Choisis un numéro de page entier entre 1 et 10000.');
+  }
   if (interaction.data.name === 'comparaison' &&
     options.find((o) => o.name === 'pilote1')?.value === options.find((o) => o.name === 'pilote2')?.value) {
     return reply('Choisis deux pilotes différents pour la comparaison.');
