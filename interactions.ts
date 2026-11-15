@@ -1,3 +1,4 @@
+import { routeTicket } from './tickets.mjs';
 type Interaction = {
   type: number;
   application_id: string;
@@ -147,6 +148,7 @@ async function commandEmbed(interaction: Interaction): Promise<Embed> {
       { name: '⏱️ Chronos', value: '**/records circuit** — Top 10 du circuit.\n**/mesrecords pilote [page]** — Tous les records personnels.\n**/dernierschronos** — Les 10 derniers chronos validés publics.' },
       { name: '⚔️ Pilotes', value: '**/profil pilote** — Statistiques et meilleurs résultats.\n**/classement** — Top 10 Elo.\n**/comparaison pilote1 pilote2 circuit** — Duel de chronos.\n**/rival pilote circuit** — Prochain temps à battre.' },
       { name: '🗺️ Circuits', value: '**/circuit circuit** — Fiche et record du circuit.\n**/circuits ville [page]** — Recherche par ville.' },
+      { name: '🎫 Assistance', value: '**/tickets staff** — Installer le panneau (administrateurs).\n**/fermer-ticket** — Fermer ton ticket ou celui du staff. Utilise les boutons du panneau pour ouvrir une demande privée.' },
       { name: '💡 Mode d’emploi', value: 'Les pilotes sont recherchés par pseudo Kart Rivals. Sélectionne les suggestions. Pour les listes, ajoute **page:2**, puis 3… Les réponses sont visibles uniquement par toi dans le salon de test.' },
     ];
     return embed;
@@ -370,6 +372,8 @@ export async function handleInteraction(request: Request) {
     return new Response(null, { status: 400 });
   }
   if (interaction.type === 1) return Response.json({ type: 1 });
+  const ticketResponse = routeTicket(interaction);
+  if (ticketResponse) return ticketResponse;
   if (!interaction.data || !Object.hasOwn(requiredOptions, interaction.data.name) || ![2, 4].includes(interaction.type)) {
     return new Response(null, { status: 400 });
   }

@@ -102,14 +102,14 @@ test('authorization, invalid input and autocomplete', async () => {
   }
   assert.equal(requests, 2, 'complete prefix cache avoids second lookup');
 });
-test('registration upserts ten commands and preserves unrelated commands', async () => {
+test('registration upserts twelve commands and preserves unrelated commands', async () => {
   const registered = [];
   await registerCommands({ DISCORD_APPLICATION_ID: '333333333333333333', DISCORD_GUILD_ID: '111111111111111111', DISCORD_BOT_TOKEN: 'test' }, async (url, init) => {
     assert.equal(init.method, 'POST');
     registered.push(JSON.parse(init.body));
     return Response.json({});
   });
-  assert.deepEqual(registered.map((c) => c.name), ['records', 'profil', 'classement', 'circuit', 'comparaison', 'mesrecords', 'rival', 'dernierschronos', 'circuits', 'aide']);
+  assert.deepEqual(registered.map((c) => c.name), ['tickets', 'fermer-ticket', 'records', 'profil', 'classement', 'circuit', 'comparaison', 'mesrecords', 'rival', 'dernierschronos', 'circuits', 'aide']);
   for (const c of commands) assert.ok(c.description.length <= 100);
 });
 test('new commands: pagination, rivals, recent laps and help', async () => {
@@ -143,3 +143,15 @@ test('new commands: pagination, rivals, recent laps and help', async () => {
   for (const page of [0, -1, 1.2, '2', 10001]) assert.equal((await (await send('mesrecords', { pilote: id, page })).json()).type, 4);
   assert.equal((await (await send('circuits', { ville: '*' })).json()).type, 4);
 });
+
+ test('ticket components use the signed HTTP endpoint outside the test channel', async () => {
+  process.env.DISCORD_APPLICATION_ID = '333333333333333333';
+  process.env.DISCORD_BOT_TOKEN = 'fake';
+  const result = await send('', {}, { type: 3, channel_id: '555555555555555555',
+    member: { user: { id: '666666666666666666' }, roles: [], permissions: '0' },
+    message: { author: { id: '333333333333333333' } },
+    data: { custom_id: 'kr-ticket:new:bug:777777777777777777' } });
+  assert.equal((await result.json()).type, 9);
+  const invalid = await handleInteraction(new Request('https://bot.example/interactions', {method:'POST',body:JSON.stringify({type:3,data:{custom_id:'kr-ticket:close'}})}));
+  assert.equal(invalid.status,401);
+ });

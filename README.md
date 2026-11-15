@@ -112,3 +112,15 @@ le bot envoie l’embed d’origine avec son avatar miniature.
 
 `previews/bienvenue-kart-rivals.png` est un exemple avec silhouette de démonstration.
 Le vrai avatar est téléchargé au moment où le membre rejoint le serveur.
+
+## Tickets privés
+
+Après déploiement, un administrateur utilise `/tickets staff:@Staff` dans le salon textuel où publier le panneau. Choisir un rôle réservé aux personnes autorisées à lire les demandes : ne pas utiliser un rôle communautaire. Aucun nouvel identifiant d’environnement n’est nécessaire. Les tickets fonctionnent dans le serveur configuré, indépendamment du salon de test des commandes de chronos.
+
+Les boutons **Chrono suspect**, **Signaler un bug**, **Contacter le staff** ouvrent un formulaire puis un salon privé. Le membre peut y ajouter ses captures. Les autorisations sont définies dès la création : membre, rôle staff sélectionné et bot ; les administrateurs Discord ont également accès. Un seul ticket ouvert par membre ; l’état est conservé dans le sujet du salon, y compris après redémarrage (ne pas modifier ce sujet).
+
+Le bouton **Fermer le ticket** ou `/fermer-ticket` demande confirmation. Seuls l’auteur, le rôle staff sélectionné et les administrateurs peuvent fermer. La fermeture conserve les messages et rend le salon accessible en lecture au demandeur. Le staff peut ensuite supprimer le salon manuellement selon sa politique de conservation. Aucun export ou envoi de transcript externe n’est effectué.
+
+Permissions nécessaires au bot : Voir les salons, Envoyer des messages, Intégrer des liens, Lire l’historique, Joindre des fichiers, Gérer les salons et Gérer les rôles (modification des permissions). Le rôle staff ne doit pas être un rôle géré par une intégration. Si ce rôle est supprimé, republier le panneau avec un rôle valide. Pour modifier l’accès aux tickets déjà créés, ajuster leurs permissions et leur sujet avec précaution.
+
+Les salons de tickets sont créés sans catégorie pour éviter d’hériter de permissions publiques. L’anti-doublon combine un verrou pendant la création et une recherche des tickets ouverts sur Discord. Exécuter une seule instance du bot ; plusieurs instances peuvent créer des doublons simultanés. L’envoi au staff est réalisé dans le salon privé sans mention de rôle globale.

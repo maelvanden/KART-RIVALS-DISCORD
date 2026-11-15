@@ -2,6 +2,10 @@ const circuit = { name: 'circuit', description: 'Tape le nom du circuit ou sa vi
 const pilot = (name) => ({ name, description: 'Recherche un pseudo Kart Rivals (pas un compte Discord)', type: 3, required: true, autocomplete: true });
 const page = { name: 'page', description: 'Page de résultats (10 par page)', type: 4, min_value: 1, max_value: 10000 };
 export const commands = [
+  { name: 'tickets', description: 'Publier le panneau de tickets privés dans ce salon', default_member_permissions: '8', options: [
+    { name: 'staff', description: 'Rôle réservé au staff qui pourra lire et traiter les tickets', type: 8, required: true },
+  ] },
+  { name: 'fermer-ticket', description: 'Fermer le ticket actuel en conservant son historique', options: [] },
   { name: 'records', description: 'Les dix meilleurs tours validés sur un circuit', options: [circuit] },
   { name: 'profil', description: 'Statistiques et records personnels d’un pilote Kart Rivals', options: [pilot('pilote')] },
   { name: 'classement', description: 'Le top 10 Elo des pilotes publics Kart Rivals', options: [] },
