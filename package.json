@@ -1,1 +1,1 @@
-{"private":true,"type":"module","engines":{"node":">=24"},"scripts":{"start":"node server.mjs"}}
+{"private":true,"type":"module","engines":{"node":">=24"},"scripts":{"start":"node server.mjs"},"dependencies":{"discord.js":"14.28.1"}}

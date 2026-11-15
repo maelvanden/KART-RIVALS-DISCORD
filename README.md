@@ -50,8 +50,8 @@ ne garantit pas les mêmes conditions de roulage entre deux sessions.
    Conserver les autres variables existantes, notamment `DISCORD_TEST_CHANNEL_ID`.
 3. Redéployer la dernière version de `main`. Si le token est présent, le serveur
    enregistre les dix commandes au démarrage. Les logs confirment chaque commande.
-4. Tester dans le salon configuré. Le token peut ensuite être retiré : il sert uniquement
-   à enregistrer les commandes. Sans token, les commandes déjà enregistrées continuent de fonctionner.
+4. Tester dans le salon configuré. Conserver le token : il sert aussi à la connexion
+   permanente nécessaire à l’accueil automatique des nouveaux membres.
 
 L’ancien script `node register-discord-records.mjs` enregistre désormais les dix commandes.
 Il met à jour chacune d’elles sans supprimer les autres commandes éventuelles du serveur.
@@ -67,3 +67,31 @@ Le pied de l’embed indique s’il reste une page. Les commandes gardent leurs 
 
 La migration `20261223000083_discord_commands.sql` doit être appliquée avant le
 redéploiement du bot ; elle ajoute deux fonctions SQL accessibles uniquement au service backend.
+
+## Accueil automatique des nouveaux membres
+
+Le bot envoie un embed vert lime avec la mention et l’avatar du nouveau membre dans
+le salon `1571089851330068500`. Seuls les nouveaux membres humains du serveur
+`DISCORD_GUILD_ID` sont concernés : aucun message de bienvenue au démarrage ni pour
+les membres déjà présents. Les salons règlement et général sont repérés par leur nom ;
+s’ils sont introuvables, le texte reste utilisable sans lien inventé.
+
+1. Discord Developer Portal → application → **Bot → Privileged Gateway Intents** :
+   activer **Server Members Intent**, puis enregistrer. Message Content Intent et
+   Presence Intent ne sont pas nécessaires.
+2. Conserver `DISCORD_BOT_TOKEN` et `DISCORD_GUILD_ID` dans FadeHost. Le jeton est
+   désormais nécessaire en permanence pour recevoir les arrivées, pas seulement pour
+   enregistrer les commandes. `DISCORD_WELCOME_CHANNEL_ID` permet de changer le salon
+   (facultatif : l’identifiant ci-dessus est utilisé par défaut).
+3. Dans le salon, autoriser le bot à **Voir le salon**, **Envoyer des messages** et
+   **Intégrer des liens**.
+4. **Save & redeploy** installe les dépendances puis démarre l’écoute Gateway. Le log
+   `Accueil automatique connecté` confirme la connexion. Les commandes continuent de
+   passer par le point de terminaison HTTP existant ; ne pas le supprimer.
+5. Tester avec l’arrivée d’un nouveau membre. Les messages sont publics dans le salon
+   d’accueil et seule la personne accueillie est mentionnée. Les doublons d’un même
+   événement sont filtrés et les reprises utilisent un nonce Discord stable.
+
+Le SDK Discord gère les heartbeats, les limites REST et la reconnexion. Une arrivée
+pendant une coupure non récupérable n’est pas rejouée à partir de la liste des membres.
+Ne pas retirer le jeton si l’accueil automatique doit rester actif.

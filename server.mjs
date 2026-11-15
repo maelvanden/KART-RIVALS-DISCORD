@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { registerCommands } from './commands.mjs';
+import { startWelcome } from './welcome.mjs';
 import { handleInteraction } from './interactions.ts';
 
 const port = Number(process.env.PORT ?? 3000);
@@ -46,3 +47,7 @@ createServer(async (incoming, outgoing) => {
 if (process.env.DISCORD_BOT_TOKEN) {
   void registerCommands().catch((error) => console.error('Command registration failed:', error.message));
 }
+
+const welcomeClient = startWelcome();
+process.once('SIGTERM', () => { welcomeClient?.destroy(); process.exit(0); });
+process.once('SIGINT', () => { welcomeClient?.destroy(); process.exit(0); });
