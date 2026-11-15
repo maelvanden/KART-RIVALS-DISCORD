@@ -13,9 +13,8 @@ export function welcomePayload(member) {
   const general = findChannel('general');
   const mention = '<@' + member.id + '>';
   const steps = [
-    '📜 ' + (rules ? 'Lis le règlement dans <#' + rules.id + '>.' : 'Prends connaissance du règlement du serveur.'),
-    '👋 ' + (general ? 'Présente-toi dans <#' + general.id + '> : prénom, région et circuit préféré.' : 'Présente-toi à la communauté : prénom, région et circuit préféré.'),
-    '⏱️ Partage tes sessions, compare tes chronos et trouve tes prochains rivaux !',
+    '📜 ' + (rules ? 'Lis le règlement : <#' + rules.id + '>.' : 'Lis le règlement du serveur.'),
+    '👋 ' + (general ? 'Viens te présenter : <#' + general.id + '>.' : 'Viens te présenter à la communauté.'),
   ];
   return {
     content: mention + ', bienvenue sur la grille ! 🏎️',
@@ -25,15 +24,10 @@ export function welcomePayload(member) {
     enforce_nonce: true,
     embeds: [{
       color: 0xdfff00,
-      author: { name: 'KART RIVALS • NOUVEAU PILOTE' },
       title: '🏁 Bienvenue dans le paddock !',
-      description: mention + ', tu rejoins **Kart Rivals**, la communauté des passionnés de karting.\n\nDébutant ou habitué des podiums, **tu as ta place sur la grille** !',
+      description: 'Partage tes chronos et trouve tes prochains rivaux !\n\n' + steps.join('\n'),
       thumbnail: { url: member.user.displayAvatarURL({ size: 256, extension: 'png' }) },
-      fields: [
-        { name: '🚦 Avant de prendre la piste', value: steps.join('\n\n') },
-        { name: '🔥 À toi de jouer', value: 'Le prochain chrono à battre, c’est peut-être le tien !' },
-      ],
-      footer: { text: 'Kart Rivals • La passion du karting nous rassemble' },
+      footer: { text: 'Kart Rivals • À toi de jouer !' },
       timestamp: new Date().toISOString(),
     }],
   };
