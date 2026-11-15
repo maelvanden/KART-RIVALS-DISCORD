@@ -12,7 +12,7 @@ const member = { id: '111111111111111111', joinedTimestamp: 1000,
 test('welcome embed uses avatar, real channel mentions and only pings newcomer', () => {
  const payload = welcomePayload(member);
  assert.deepEqual(payload.allowed_mentions, { parse: [], users: [member.id] });
- assert.equal(payload.embeds[0].color, 0xd4ff00);
+ assert.equal(payload.embeds[0].color, 0xdfff00);
  assert.match(payload.embeds[0].thumbnail.url, /^https:/);
  assert.match(JSON.stringify(payload), /<#222222222222222222>/);
  assert.match(JSON.stringify(payload), /<#333333333333333333>/);
@@ -27,6 +27,7 @@ test('welcome embed uses avatar, real channel mentions and only pings newcomer',
 test('only welcomes new humans in target guild, suppresses duplicates and allows later rejoin', async () => {
  const sent = [];
  const handle = createWelcomeHandler({ guildId, channelId: DEFAULT_WELCOME_CHANNEL_ID,
+  renderBanner: async () => Buffer.from("png-test"),
   send: async (...args) => { sent.push(args); }, log: { info() {}, error() {} } });
  await handle({ ...member, guild: { ...member.guild, id: '999999999999999999' } });
  await handle({ ...member, user: { ...member.user, bot: true } });
@@ -40,6 +41,7 @@ test('only welcomes new humans in target guild, suppresses duplicates and allows
 test('permission failures are caught without logging token or request content', async () => {
  const logs = [];
  const handle = createWelcomeHandler({ guildId, channelId: DEFAULT_WELCOME_CHANNEL_ID,
+  renderBanner: async () => Buffer.from("png-test"),
   send: async () => { throw Object.assign(new Error('secret-token'), { code: 50013 }); },
   log: { info() {}, error: (...values) => logs.push(values) } });
  await handle(member);

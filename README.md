@@ -95,3 +95,20 @@ s’ils sont introuvables, le texte reste utilisable sans lien inventé.
 Le SDK Discord gère les heartbeats, les limites REST et la reconnexion. Une arrivée
 pendant une coupure non récupérable n’est pas rejouée à partir de la liste des membres.
 Ne pas retirer le jeton si l’accueil automatique doit rester actif.
+
+### Bannière personnalisée
+
+Chaque arrivée produit une image PNG 1200×440 intégrée à l’embed : fond noir,
+accent jaune fluo, logo Kart Rivals original, avatar rond et pseudo du membre.
+Les images sont calculées localement avec `@napi-rs/canvas` ; aucune API d’image ni
+clé supplémentaire n’est nécessaire. Le logo et la police sont embarqués dans `assets/`.
+La police DejaVu Sans Bold est distribuée avec sa licence (sous-ensemble Latin/grec/cyrillique).
+
+Autoriser aussi **Joindre des fichiers** dans le salon d’accueil. Les anciens messages
+ne sont pas modifiés ; la bannière est utilisée pour les prochaines arrivées après
+redéploiement. Le téléchargement de l’avatar est limité au CDN Discord, 4 secondes
+et 2 Mo. En cas d’échec, une silhouette neutre est affichée ; si la génération échoue,
+le bot envoie l’embed d’origine avec son avatar miniature.
+
+`previews/bienvenue-kart-rivals.png` est un exemple avec silhouette de démonstration.
+Le vrai avatar est téléchargé au moment où le membre rejoint le serveur.

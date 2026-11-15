@@ -1,3 +1,4 @@
+import { renderWelcomeBanner } from './welcome-banner.mjs';
 import { createHash } from 'node:crypto';
 import { Client, Events, GatewayIntentBits, Routes } from 'discord.js';
 
@@ -23,7 +24,7 @@ export function welcomePayload(member) {
     nonce: createHash('sha256').update(member.guild.id + ':' + member.id + ':' + member.joinedTimestamp).digest('hex').slice(0, 24),
     enforce_nonce: true,
     embeds: [{
-      color: 0xd4ff00,
+      color: 0xdfff00,
       author: { name: 'KART RIVALS • NOUVEAU PILOTE' },
       title: '🏁 Bienvenue dans le paddock !',
       description: mention + ', tu rejoins **Kart Rivals**, la communauté des passionnés de karting.\n\nDébutant ou habitué des podiums, **tu as ta place sur la grille** !',
@@ -38,7 +39,7 @@ export function welcomePayload(member) {
   };
 }
 
-export function createWelcomeHandler({ guildId, channelId, send, log = console }) {
+export function createWelcomeHandler({ guildId, channelId, send, renderBanner = renderWelcomeBanner, log = console }) {
   const seen = new Map();
   return async (member) => {
     if (member.guild.id !== guildId || member.user.bot || !snowflake.test(member.id)) return;
@@ -49,12 +50,23 @@ export function createWelcomeHandler({ guildId, channelId, send, log = console }
     seen.set(key, now);
     if (seen.size > 10000) seen.delete(seen.keys().next().value);
     try {
-      await send(channelId, welcomePayload(member));
+      const body = welcomePayload(member);
+      let files;
+      try {
+        const image = await renderBanner(member);
+        files = [{ name: 'bienvenue.png', data: image, contentType: 'image/png' }];
+        body.attachments = [{ id: 0, filename: 'bienvenue.png', description: 'Bienvenue sur Kart Rivals, avec ton avatar et ton pseudo.' }];
+        body.embeds[0].image = { url: 'attachment://bienvenue.png' };
+        delete body.embeds[0].thumbnail;
+      } catch {
+        log.warn?.('Bannière indisponible : envoi de l’embed avec avatar.');
+      }
+      await send(channelId, body, files);
       log.info('Bienvenue envoyée dans le salon configuré.');
     } catch (error) {
       seen.delete(key);
       // Log only a numeric Discord code, never request data or the bot token.
-      log.error('Échec du message de bienvenue. Vérifie le salon et les permissions Voir le salon, Envoyer des messages, Intégrer des liens. Code :',
+      log.error('Échec du message de bienvenue. Vérifie le salon et les permissions Voir le salon, Envoyer des messages, Intégrer des liens, Joindre des fichiers. Code :',
         Number.isInteger(error?.code) ? error.code : 'réseau');
     }
   };
@@ -71,7 +83,7 @@ export function startWelcome(env = process.env, log = console) {
   // Gateway is used only for arrivals; slash commands remain served through HTTP.
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
   client.on(Events.GuildMemberAdd, createWelcomeHandler({ guildId, channelId, log,
-    send: (id, body) => client.rest.post(Routes.channelMessages(id), { body }),
+    send: (id, body, files) => client.rest.post(Routes.channelMessages(id), { body, files }),
   }));
   client.once(Events.ClientReady, () => log.info('Accueil automatique connecté • salon ' + channelId));
   client.on(Events.Error, () => log.error('Connexion Discord indisponible ; surveille la reconnexion.'));
