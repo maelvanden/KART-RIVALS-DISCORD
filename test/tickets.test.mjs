@@ -53,12 +53,13 @@ test('API errors never expose secrets and creation lock is released',async()=>{
  const result=await h.finished;assert.doesNotMatch(result.content,/secret/);
  assert.equal((await h.route(base).json()).type,5);
 });
-test('admin publishes panel with all four buttons and no role ping',async()=>{
+test('admin publishes panel with a four-option menu and no role ping',async()=>{
  const h=harness([{id:channel,guild_id:guild,type:0}]);
  h.route({...base,type:2,member:{...base.member,permissions:'8'},data:{name:'tickets',options:[{name:'staff',value:role}]}});
  assert.match((await h.finished).content,/publié/);
  const panel=h.calls.find(c=>c[0]==='post')[2].body;
- assert.equal(panel.components[0].components.length,4);assert.deepEqual(panel.allowed_mentions,{parse:[]});
+ assert.equal(panel.components[0].components[0].type,3);assert.equal(panel.components[0].components[0].options.length,4);
+ assert.equal(h.calls.find(c=>c[0]==='post')[1],'/channels/1571664348882018365/messages');assert.deepEqual(panel.allowed_mentions,{parse:[]});
 });
 test('deleted staff role fails closed without creating a channel',async()=>{
  const h=harness();h.api.get=async()=>[];h.route(base);
@@ -80,4 +81,13 @@ test('partnership opens its tailored form and creates a private ticket',async()=
  const create=h.calls.find(c=>c[0]==='post'&&c[1].endsWith('/channels'));
  assert.match(create[2].body.name,/ticket-partenariat/);
  assert.deepEqual(create[2].body.permission_overwrites,ticketOverwrites(guild,owner,role,bot));
+});
+
+test('select menu opens the selected form, rejects forged choices and foreign authors', async()=>{
+ const h=harness();
+ const choose={...base,type:3,message:{author:{id:bot}},data:{custom_id:'kr-ticket:select:'+role,values:['partenariat']}};
+ const modal=await h.route(choose).json();assert.equal(modal.type,9);assert.match(modal.data.custom_id,/submit:partenariat/);
+ assert.equal((await h.route({...choose,data:{...choose.data,values:['unknown']}}).json()).type,4);
+ assert.equal((await h.route({...choose,message:{author:{id:owner}}}).json()).type,4);
+ assert.equal(h.calls.length,0);
 });

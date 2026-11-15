@@ -1,5 +1,6 @@
 import { REST, Routes, PermissionFlagsBits as P } from 'discord.js';
 
+export const DEFAULT_TICKET_PANEL_CHANNEL_ID = '1571664348882018365';
 const kinds = { chrono: '🏁 Chrono suspect', bug: '🐛 Signaler un bug', staff: '💬 Contacter le staff', partenariat: '🤝 Demande de partenariat' };
 const id = /^\d{17,20}$/;
 const reply = (content) => Response.json({ type: 4, data: { content, flags: 64, allowed_mentions: { parse: [] } } });
@@ -54,19 +55,30 @@ export function createTicketRouter({ env = process.env, rest, log = console } = 
       return defer(i, async (api) => {
         const roles = await api.get(Routes.guildRoles(i.guild_id));
         if (!roles.some((r) => r.id === role && !r.managed)) return 'Choisis un rôle staff existant, non géré par un bot.';
-        const channel = await api.get(Routes.channel(i.channel_id));
+        const target = env.DISCORD_TICKET_PANEL_CHANNEL_ID || DEFAULT_TICKET_PANEL_CHANNEL_ID;
+        if (!id.test(target)) return 'Identifiant du salon de tickets invalide.';
+        const channel = await api.get(Routes.channel(target));
         if (channel.guild_id !== i.guild_id || ![0, 5].includes(channel.type)) return 'Installe le panneau dans un salon textuel classique.';
-        await api.post(Routes.channelMessages(i.channel_id), { body: {
+        await api.post(Routes.channelMessages(target), { body: {
           allowed_mentions: { parse: [] },
-          embeds: [{ color: 0xdfff00, title: '🎫 Assistance Kart Rivals',
-            description: 'Un chrono suspect, un bug, une question ou un partenariat ?\nChoisis un motif pour ouvrir un ticket privé avec le staff.\n\nUn seul ticket ouvert par personne. Les administrateurs ont également accès aux tickets.',
-            footer: { text: 'Kart Rivals • On est là pour t’aider' } }],
-          components: [row(...Object.entries(kinds).map(([key, label]) => button('kr-ticket:new:' + key + ':' + role, label)))],
+          embeds: [{ color: 0xdfff00, title: '🎫 Création de ticket',
+            description: 'Besoin de contacter l’équipe **Kart Rivals** ?\n\nChoisis le motif ci-dessous : chrono suspect, bug, partenariat ou question au staff.\nUn salon privé sera ouvert pour ta demande.',
+            footer: { text: 'Kart Rivals • Un ticket ouvert par personne' } }],
+          components: [row({ type: 3, custom_id: 'kr-ticket:select:' + role,
+            placeholder: 'Choisis un motif pour créer un ticket', min_values: 1, max_values: 1,
+            options: Object.entries(kinds).map(([value, label]) => ({ label, value })),
+          })],
         } });
-        return 'Panneau publié ! Le rôle <@&' + role + '> aura accès aux nouveaux tickets.';
+        return 'Panneau publié dans <#' + target + '> ! Le rôle <@&' + role + '> aura accès aux nouveaux tickets.';
       });
     }
-    const open = /^kr-ticket:new:(chrono|bug|staff|partenariat):(\d{17,20})$/.exec(custom);
+    let open = /^kr-ticket:new:(chrono|bug|staff|partenariat):(\d{17,20})$/.exec(custom);
+    const select = /^kr-ticket:select:(\d{17,20})$/.exec(custom);
+    if (i.type === 3 && select) {
+      const choice = i.data.values?.[0];
+      if (i.data.values?.length !== 1 || !Object.hasOwn(kinds, choice ?? '')) return reply('Choisis un motif dans le menu.');
+      open = [custom, choice, select[1]];
+    }
     if (i.type === 3 && open) {
       if (i.message?.author?.id !== i.application_id) return reply('Utilise le panneau officiel du bot.');
       return Response.json({ type: 9, data: {
