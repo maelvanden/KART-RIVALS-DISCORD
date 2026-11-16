@@ -5,6 +5,7 @@ type Interaction = {
   guild_id?: string;
   channel_id?: string;
   token: string;
+  member?: { user?: { id?: string } };
   data?: { name: string; options?: { name: string; value: string | number; focused?: boolean }[] };
 };
 
@@ -62,6 +63,19 @@ async function query<T>(params: URLSearchParams, timeout = 1800): Promise<T> {
     signal: AbortSignal.timeout(timeout),
   });
   if (!response.ok) throw new Error('Kart Rivals HTTP ' + response.status);
+  return response.json();
+}
+
+async function accountQuery(action: 'link' | 'unlink' | 'linked', discordId: string, code?: string): Promise<{ status?: string; profile_id?: string }> {
+  const endpoint = process.env.KART_RIVALS_API_URL;
+  const key = process.env.KART_RIVALS_BOT_KEY;
+  if (!endpoint || !key || !snowflake.test(discordId)) throw new Error('Account configuration missing');
+  const response = await fetch(endpoint, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, discord_id: discordId, ...(code ? { code } : {}) }),
+    redirect: 'error', signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error('Account service unavailable');
   return response.json();
 }
 
@@ -141,6 +155,22 @@ function pilotStats(pilot: Pilot) {
 }
 async function commandEmbed(interaction: Interaction): Promise<Embed> {
   const name = interaction.data!.name;
+  const discordId = interaction.member?.user?.id ?? '';
+  if (name === 'lier' || name === 'delier') {
+    const code = String(interaction.data?.options?.find((o) => o.name === 'code')?.value ?? '');
+    const result = await accountQuery(name === 'lier' ? 'link' : 'unlink', discordId, code);
+    if (result.status === 'linked') return notice('🔗 Compte lié !', 'Tu peux maintenant utiliser **/profil**, **/mesrecords** et **/rival circuit** sans préciser ton pseudo. Les données privées restent masquées.');
+    if (result.status === 'unlinked') return notice('Compte dissocié', 'Ton compte Discord n’est plus lié à Kart Rivals.');
+    if (result.status === 'limited') return notice('Patiente un instant', 'Trop de tentatives. Réessaie dans 15 minutes avec un nouveau code.');
+    if (result.status === 'already_linked') return notice('Compte déjà lié', 'Utilise **/delier** avant de relier un autre compte.');
+    return notice('Code invalide ou expiré', 'Dans Kart Rivals, ouvre **Modifier ma licence → Mon compte Discord**, génère un code puis utilise **/lier code**. Le code est valable 10 minutes, une seule fois.');
+  }
+  if (['profil', 'mesrecords', 'rival'].includes(name) && !interaction.data!.options?.some((o) => o.name === 'pilote')) {
+    const linked = await accountQuery('linked', discordId);
+    if (!uuid.test(linked.profile_id ?? '')) return notice('Lie ton compte Kart Rivals', 'Dans Kart Rivals : **Modifier ma licence → Mon compte Discord**. Génère un code puis saisis **/lier code** ici. Tu peux aussi choisir un pilote dans la commande.');
+    interaction.data!.options = [...(interaction.data!.options ?? []), { name: 'pilote', value: linked.profile_id! }];
+  }
+
   const option = (key: string) => String(interaction.data!.options?.find((o) => o.name === key)?.value ?? '');
   if (name === 'aide') {
     const embed = card('AIDE', '🏁 Ton paddock Kart Rivals', 'Choisis une commande et prends la piste !');
@@ -148,6 +178,7 @@ async function commandEmbed(interaction: Interaction): Promise<Embed> {
       { name: '⏱️ Chronos', value: '**/records circuit** — Top 10 du circuit.\n**/mesrecords pilote [page]** — Tous les records personnels.\n**/dernierschronos** — Les 10 derniers chronos validés publics.' },
       { name: '⚔️ Pilotes', value: '**/profil pilote** — Statistiques et meilleurs résultats.\n**/classement** — Top 10 Elo.\n**/comparaison pilote1 pilote2 circuit** — Duel de chronos.\n**/rival pilote circuit** — Prochain temps à battre.' },
       { name: '🗺️ Circuits', value: '**/circuit circuit** — Fiche et record du circuit.\n**/circuits ville [page]** — Recherche par ville.' },
+      { name: '🔗 Ton compte', value: '**/lier code** — Lier ton compte avec un code de l’application.\n**/delier** — Dissocier ton compte. Une fois lié, le pilote est facultatif pour /profil, /mesrecords et /rival.' },
       { name: '🎫 Assistance', value: '**/tickets staff** — Installer le panneau (administrateurs).\n**/fermer-ticket** — Fermer ton ticket ou celui du staff. Utilise les boutons du panneau pour ouvrir une demande privée.' },
       { name: '💡 Mode d’emploi', value: 'Les pilotes sont recherchés par pseudo Kart Rivals. Sélectionne les suggestions. Pour les listes, ajoute **page:2**, puis 3… Les réponses sont visibles uniquement par toi dans le salon de test.' },
     ];
@@ -357,6 +388,7 @@ async function autocompletePilots(search: string) {
 const requiredOptions: Record<string, string[]> = {
   records: ['circuit'], circuit: ['circuit'], profil: ['pilote'], classement: [],
   comparaison: ['pilote1', 'pilote2', 'circuit'],
+  lier: [], delier: [],
   mesrecords: ['pilote'], rival: ['pilote', 'circuit'], dernierschronos: [], circuits: ['ville'], aide: [],
 };
 
@@ -380,7 +412,8 @@ export async function handleInteraction(request: Request) {
 
   const guild = process.env['DISCORD_GUILD_ID'];
   const channel = process.env['DISCORD_TEST_CHANNEL_ID'];
-  const allowed = Boolean(guild && channel && interaction.guild_id === guild && interaction.channel_id === channel);
+  const accountCommand = ['lier', 'delier'].includes(interaction.data.name);
+  const allowed = Boolean(guild && interaction.guild_id === guild && (accountCommand || (channel && interaction.channel_id === channel)));
   const options = interaction.data.options ?? [];
   const required = requiredOptions[interaction.data.name];
   const focused = options.find((option) => option.focused);
@@ -390,8 +423,15 @@ export async function handleInteraction(request: Request) {
     return Response.json({ type: 8, data: { choices } });
   }
   if (!allowed) return reply('Utilise cette commande dans le salon de test Kart Rivals.');
+  const needsIdentity = accountCommand || (['profil', 'mesrecords', 'rival'].includes(interaction.data.name) && !options.some((o) => o.name === 'pilote'));
+  if (needsIdentity && (!snowflake.test(interaction.member?.user?.id ?? '') || interaction.application_id !== process.env.DISCORD_APPLICATION_ID)) return reply('Utilise cette commande depuis ton compte dans le serveur Kart Rivals.');
+  if (interaction.data.name === 'lier') {
+    const code = options.find((o) => o.name === 'code')?.value;
+    if (typeof code !== 'string' || code.length > 80 || !/^[A-F0-9]{32}$/.test(code.replace(/[-\s]/g, '').toUpperCase())) return reply('Copie le code depuis Kart Rivals → Modifier ma licence → Mon compte Discord.');
+  }
   if (required.some((key) => {
     const value = options.find((option) => option.name === key)?.value;
+    if (key === 'pilote' && value === undefined && ['profil', 'mesrecords', 'rival'].includes(interaction.data!.name)) return false;
     return typeof value !== 'string' || (key === 'ville' ? value.replace(/[^\p{L}\p{M}\p{N} -]/gu, '').trim().length < 2 || value.length > 80 : !uuid.test(value));
   })) return reply('Sélectionne les pilotes et les circuits dans les suggestions.');
   const page = options.find((o) => o.name === 'page')?.value;

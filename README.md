@@ -124,3 +124,11 @@ Le bouton **Fermer le ticket** ou `/fermer-ticket` demande confirmation. Seuls l
 Permissions nécessaires au bot : Voir les salons, Envoyer des messages, Intégrer des liens, Lire l’historique, Joindre des fichiers, Gérer les salons et Gérer les rôles (modification des permissions). Le rôle staff ne doit pas être un rôle géré par une intégration. Si ce rôle est supprimé, republier le panneau avec un rôle valide. Pour modifier l’accès aux tickets déjà créés, ajuster leurs permissions et leur sujet avec précaution.
 
 Les salons de tickets sont créés sans catégorie pour éviter d’hériter de permissions publiques. L’anti-doublon combine un verrou pendant la création et une recherche des tickets ouverts sur Discord. Exécuter une seule instance du bot ; plusieurs instances peuvent créer des doublons simultanés. L’envoi au staff est réalisé dans le salon privé sans mention de rôle globale.
+
+## Lier son compte Kart Rivals
+
+Dans l’application, ouvrir **Modifier ma licence → Mon compte Discord**, générer un code puis utiliser `/lier code:…` dans le serveur Kart Rivals. Le code est privé, valable 10 minutes et utilisable une seule fois. Le bot répond uniquement au membre. Un nouveau code invalide le précédent ; ne jamais demander le mot de passe Kart Rivals ni le token Discord du membre.
+
+Après liaison, `/profil`, `/mesrecords [page]` et `/rival circuit` utilisent automatiquement le profil lié. L’option facultative `pilote` permet toujours de consulter un autre pilote public. Les commandes de statistiques restent dans le salon de test configuré ; `/lier` et `/delier` fonctionnent dans les salons du serveur. Les profils privés, bannis ou démo ne deviennent pas publics grâce à la liaison.
+
+`/delier` dissocie le compte ; cette action est aussi disponible dans l’application. Une seule association par compte Discord et par pilote. Pour changer de compte, dissocier d’abord l’ancien. La liaison est enregistrée dans Supabase, pas dans la mémoire du bot. Déployer la migration et l’Edge Function `discord-data`, mettre à jour l’application puis redéployer le bot. Aucune nouvelle variable d’environnement n’est nécessaire.

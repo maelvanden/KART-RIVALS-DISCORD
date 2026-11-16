@@ -102,14 +102,14 @@ test('authorization, invalid input and autocomplete', async () => {
   }
   assert.equal(requests, 2, 'complete prefix cache avoids second lookup');
 });
-test('registration upserts twelve commands and preserves unrelated commands', async () => {
+test('registration upserts fourteen commands and preserves unrelated commands', async () => {
   const registered = [];
   await registerCommands({ DISCORD_APPLICATION_ID: '333333333333333333', DISCORD_GUILD_ID: '111111111111111111', DISCORD_BOT_TOKEN: 'test' }, async (url, init) => {
     assert.equal(init.method, 'POST');
     registered.push(JSON.parse(init.body));
     return Response.json({});
   });
-  assert.deepEqual(registered.map((c) => c.name), ['tickets', 'fermer-ticket', 'records', 'profil', 'classement', 'circuit', 'comparaison', 'mesrecords', 'rival', 'dernierschronos', 'circuits', 'aide']);
+  assert.deepEqual(registered.map((c) => c.name), ['lier', 'delier', 'tickets', 'fermer-ticket', 'records', 'profil', 'classement', 'circuit', 'comparaison', 'mesrecords', 'rival', 'dernierschronos', 'circuits', 'aide']);
   for (const c of commands) assert.ok(c.description.length <= 100);
 });
 test('new commands: pagination, rivals, recent laps and help', async () => {
@@ -155,3 +155,49 @@ test('new commands: pagination, rivals, recent laps and help', async () => {
   const invalid = await handleInteraction(new Request('https://bot.example/interactions', {method:'POST',body:JSON.stringify({type:3,data:{custom_id:'kr-ticket:close'}})}));
   assert.equal(invalid.status,401);
  });
+
+test('linked commands resolve the signed caller only, explicit pilots still override', async () => {
+  process.env.DISCORD_APPLICATION_ID='333333333333333333';
+  const identity={member:{user:{id:'666666666666666666'}}};
+  for (const command of ['profil','mesrecords','rival']) {
+    let resolve; const patched=new Promise(r=>resolve=r); const calls=[];
+    global.fetch=async(url,init)=>{
+      if(String(url).startsWith('https://discord.com/')){resolve(JSON.parse(init.body));return Response.json({});}
+      calls.push([url,init]);
+      if(init.method==='POST') {assert.deepEqual(JSON.parse(init.body),{action:'linked',discord_id:'666666666666666666'});return Response.json({profile_id:id});}
+      const params=new URL(url).searchParams;assert.equal(params.get('pilot'),id);
+      return Response.json(command==='profil'?{pilot,records:[]}:command==='mesrecords'?{pilot,records:[],page:1,has_more:false}:{pilot,track,own_lap_ms:34455,rival:null});
+    };
+    const result=await send(command,command==='rival'?{circuit:id}:{},identity);
+    assert.equal((await result.json()).type,5);const message=await patched;
+    assert.doesNotMatch(message.embeds[0].title,/Arrêt aux stands/);assert.equal(calls.length,2);
+  }
+  // With an explicit pilot there is no association lookup.
+  const message=mockAPI({pilot,records:[]});assert.equal((await (await send('profil',{pilote:id},identity)).json()).type,5);await message;
+  const missing=mockAPI({});await send('profil',{},identity);assert.match((await missing).title,/Lie ton compte/);
+  assert.equal((await (await send('profil',{})).json()).type,4);
+});
+test('link/unlink are ephemeral, body-only and bound to signed Discord identity', async()=>{
+  const identity={member:{user:{id:'666666666666666666'}},channel_id:'777777777777777777'};
+  for(const [command,status] of [['lier','linked'],['delier','unlinked']]){
+    let resolve;const patched=new Promise(r=>resolve=r);
+    global.fetch=async(url,init)=>{
+      if(String(url).startsWith('https://discord.com/')) {resolve(JSON.parse(init.body));return Response.json({});}
+      assert.equal(init.method,'POST');assert.equal(new URL(url).search,'');
+      const body=JSON.parse(init.body);assert.equal(body.discord_id,identity.member.user.id);
+      assert.equal(body.action,command==='lier'?'link':'unlink');return Response.json({status});
+    };
+    assert.deepEqual(await (await send(command,command==='lier'?{code:'A'.repeat(32)}:{},identity)).json(),{type:5,data:{flags:64}});
+    const msg=await patched;assert.doesNotMatch(JSON.stringify(msg),/A{32}/);
+    assert.match(msg.embeds[0].title,command==='lier'?/Compte lié/:/dissocié/);
+  }
+  assert.equal((await (await send('lier',{code:'bad'},identity)).json()).type,4);
+  assert.equal((await (await send('lier',{code:'A'.repeat(32)},{...identity,guild_id:'999999999999999999'})).json()).type,4);
+});
+test('optional pilot definitions respect Discord required-option order',()=>{
+  for(const name of ['profil','mesrecords','rival']) {
+    const options=commands.find(c=>c.name===name).options;
+    assert.equal(options.find(o=>o.name==='pilote').required,false);
+    let optional=false;for(const o of options){if(!o.required)optional=true;else assert.equal(optional,false);}
+  }
+});
