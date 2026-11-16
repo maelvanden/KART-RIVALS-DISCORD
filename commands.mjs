@@ -21,7 +21,22 @@ export const commands = [
   { name: 'aide', description: 'Découvre toutes les commandes Kart Rivals', options: [] },
 ].map((command) => ({ ...command, type: 1 }));
 
-export async function registerCommands(env = process.env, send = fetch) {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const seconds = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+};
+// Split long waits so Node timers never overflow for an unusually long limit.
+async function waitForLimit(delay, wait) {
+  let remaining = Math.ceil(delay * 1000) + 250;
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, 60_000);
+    await wait(chunk);
+    remaining -= chunk;
+  }
+}
+
+export async function registerCommands(env = process.env, send = fetch, wait = sleep) {
   const { DISCORD_APPLICATION_ID, DISCORD_GUILD_ID, DISCORD_BOT_TOKEN } = env;
   if (![DISCORD_APPLICATION_ID, DISCORD_GUILD_ID].every((id) => /^\d{17,20}$/.test(id ?? '')) || !DISCORD_BOT_TOKEN) {
     throw new Error('Renseigne DISCORD_APPLICATION_ID, DISCORD_GUILD_ID et DISCORD_BOT_TOKEN.');
@@ -30,12 +45,29 @@ export async function registerCommands(env = process.env, send = fetch) {
     '/guilds/' + DISCORD_GUILD_ID + '/commands';
   // Upsert these commands individually; preserve any other commands already installed.
   for (const command of commands) {
-    const response = await send(url, {
-      method: 'POST',
-      headers: { Authorization: 'Bot ' + DISCORD_BOT_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify(command), signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new Error('Enregistrement /' + command.name + ' : Discord HTTP ' + response.status);
-    console.log('Commande /' + command.name + ' enregistrée.');
+    for (let attempt = 0; ; attempt++) {
+      const response = await send(url, {
+        method: 'POST',
+        headers: { Authorization: 'Bot ' + DISCORD_BOT_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify(command), signal: AbortSignal.timeout(10_000),
+      });
+      if (response.status === 429) {
+        if (attempt >= 10) throw new Error('Enregistrement /' + command.name + ' : limite Discord persistante après 10 reprises.');
+        const body = await response.json().catch(() => ({}));
+        const delay = Math.max(seconds(body?.retry_after), seconds(response.headers.get('Retry-After')),
+          seconds(response.headers.get('X-RateLimit-Reset-After'))) || 5;
+        console.log('Limite Discord pour /' + command.name + ' : reprise automatique dans ' + delay + ' s.');
+        await waitForLimit(delay, wait);
+        continue;
+      }
+      if (!response.ok) throw new Error('Enregistrement /' + command.name + ' : Discord HTTP ' + response.status);
+      console.log('Commande /' + command.name + ' enregistrée.');
+      // Avoid sending the next command into a bucket Discord reports as exhausted.
+      if (response.headers.get('X-RateLimit-Remaining') === '0') {
+        const delay = seconds(response.headers.get('X-RateLimit-Reset-After'));
+        if (delay) await waitForLimit(delay, wait);
+      }
+      break;
+    }
   }
 }
