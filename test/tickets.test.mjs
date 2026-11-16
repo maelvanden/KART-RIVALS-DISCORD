@@ -76,10 +76,14 @@ test('partnership opens its tailored form and creates a private ticket',async()=
  const modal=await h.route({...base,type:3,message:{author:{id:bot}},data:{custom_id:'kr-ticket:new:partenariat:'+role}}).json();
  assert.match(modal.data.title,/partenariat/);
  assert.match(modal.data.components[0].components[0].placeholder,/projet ou serveur/);
- h.route({...base,data:{...base.data,custom_id:modal.data.custom_id}});
+ assert.equal(modal.data.components.length,4);
+ const components=modal.data.components.map(r=>({components:[{custom_id:r.components[0].custom_id,value:'Une réponse détaillée.'}]}));
+ h.route({...base,data:{components,custom_id:modal.data.custom_id}});
  await h.finished;
  const create=h.calls.find(c=>c[0]==='post'&&c[1].endsWith('/channels'));
  assert.match(create[2].body.name,/ticket-partenariat/);
+ const embed=h.calls.find(c=>c[0]==='post'&&c[1].endsWith('/messages'))[2].body.embeds[0];
+ assert.equal(embed.fields.length,4);assert.ok(embed.fields.every(f=>f.value==='Une réponse détaillée.'));
  assert.deepEqual(create[2].body.permission_overwrites,ticketOverwrites(guild,owner,role,bot));
 });
 
@@ -89,5 +93,15 @@ test('select menu opens the selected form, rejects forged choices and foreign au
  const modal=await h.route(choose).json();assert.equal(modal.type,9);assert.match(modal.data.custom_id,/submit:partenariat/);
  assert.equal((await h.route({...choose,data:{...choose.data,values:['unknown']}}).json()).type,4);
  assert.equal((await h.route({...choose,message:{author:{id:owner}}}).json()).type,4);
+ assert.equal(h.calls.length,0);
+});
+
+test('partnership requires four bounded answers before any private channel is created',async()=>{
+ const h=harness();
+ const fields=['project','community','proposal','exchange'].map(custom_id=>({custom_id,value:'Réponse valide'}));
+ for(const bad of [fields.slice(0,3),fields.map((f,n)=>n===0?{...f,value:'  '}:f),fields.map((f,n)=>n===0?{...f,value:'x'.repeat(1001)}:f),[...fields,fields[0]]]) {
+  const response=await h.route({...base,data:{custom_id:'kr-ticket:submit:partenariat:'+role,components:[{components:bad}]}}).json();
+  assert.equal(response.type,4);assert.match(response.data.content,/quatre questions/);
+ }
  assert.equal(h.calls.length,0);
 });

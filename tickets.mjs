@@ -2,6 +2,12 @@ import { REST, Routes, PermissionFlagsBits as P } from 'discord.js';
 
 export const DEFAULT_TICKET_PANEL_CHANNEL_ID = '1571664348882018365';
 const kinds = { chrono: '🏁 Chrono suspect', bug: '🐛 Signaler un bug', staff: '💬 Contacter le staff', partenariat: '🤝 Demande de partenariat' };
+const partnershipQuestions = [
+  { custom_id: 'project', label: 'Présente ton projet ou ta communauté', placeholder: 'Nom de ton projet ou serveur, activité et lien (Discord, site ou réseaux).' },
+  { custom_id: 'community', label: 'Quelle est la taille de ta communauté ?', placeholder: 'Nombre de membres ou d’abonnés, activité et public principal.' },
+  { custom_id: 'proposal', label: 'Quel partenariat proposes-tu ?', placeholder: 'Échange de visibilité, événement karting, concours, offre pour les membres…' },
+  { custom_id: 'exchange', label: 'Tes attentes et ce que tu proposes en retour', placeholder: 'Qu’attends-tu de Kart Rivals ? Quelles actions proposes-tu de ton côté ?' },
+];
 const id = /^\d{17,20}$/;
 const reply = (content) => Response.json({ type: 4, data: { content, flags: 64, allowed_mentions: { parse: [] } } });
 const button = (custom_id, label, style = 2) => ({ type: 2, custom_id, label, style });
@@ -83,15 +89,32 @@ export function createTicketRouter({ env = process.env, rest, log = console } = 
       if (i.message?.author?.id !== i.application_id) return reply('Utilise le panneau officiel du bot.');
       return Response.json({ type: 9, data: {
         custom_id: 'kr-ticket:submit:' + open[1] + ':' + open[2], title: kinds[open[1]],
-        components: [row({ type: 4, custom_id: 'details', label: 'Décris ta demande', style: 2,
+        components: open[1] === 'partenariat'
+          ? partnershipQuestions.map((q) => row({ ...q, type: 4, style: 2, min_length: 2, max_length: 1000, required: true }))
+          : [row({ type: 4, custom_id: 'details', label: 'Décris ta demande', style: 2,
           placeholder: open[1] === 'partenariat' ? 'Présente ton projet ou serveur, son lien, ta communauté et le partenariat proposé.' : open[1] === 'chrono' ? 'Circuit, pilote, chrono concerné et raison du signalement…' : 'Explique ce qui se passe. Tu pourras ajouter des captures dans le ticket.',
           min_length: 10, max_length: 2000, required: true })],
       } });
     }
     const submit = /^kr-ticket:submit:(chrono|bug|staff|partenariat):(\d{17,20})$/.exec(custom);
     if (i.type === 5 && submit) {
-      const details = i.data.components?.flatMap((r) => r.components ?? []).find((c) => c.custom_id === 'details')?.value;
-      if (typeof details !== 'string' || details.trim().length < 10 || details.length > 2000 || submit[2] === i.guild_id) return reply('Décris ta demande en 10 à 2000 caractères.');
+      const inputs = i.data.components?.flatMap((r) => r.components ?? []) ?? [];
+      const details = inputs.find((c) => c.custom_id === 'details')?.value;
+      let fields;
+      if (submit[2] === i.guild_id) return reply('Le rôle staff configuré est invalide.');
+      if (submit[1] === 'partenariat') {
+        fields = [];
+        for (const question of partnershipQuestions) {
+          const answers = inputs.filter((c) => c.custom_id === question.custom_id);
+          const value = answers[0]?.value;
+          if (answers.length !== 1 || typeof value !== 'string' || value.trim().length < 2 || value.length > 1000) {
+            return reply('Réponds aux quatre questions (2 à 1000 caractères chacune). Si ton formulaire était déjà ouvert, ouvre-le à nouveau depuis le panneau.');
+          }
+          fields.push({ name: question.label, value: value.trim(), inline: false });
+        }
+      } else if (typeof details !== 'string' || details.trim().length < 10 || details.length > 2000) {
+        return reply('Décris ta demande en 10 à 2000 caractères.');
+      }
       const key = i.guild_id + ':' + owner;
       if (locks.has(key)) return reply('Ton ticket est en cours de création. Patiente un instant.');
       locks.add(key);
@@ -110,7 +133,8 @@ export function createTicketRouter({ env = process.env, rest, log = console } = 
           try {
             await api.post(Routes.channelMessages(channel.id), { body: {
               content: '<@' + owner + '>', allowed_mentions: { parse: [], users: [owner] },
-              embeds: [{ color: 0xdfff00, title: kinds[submit[1]], description: details,
+              embeds: [{ color: 0xdfff00, title: kinds[submit[1]],
+                ...(fields ? { fields } : { description: details }),
                 footer: { text: 'Ajoute tes captures ici. Seuls toi, le staff et les administrateurs ont accès.' } }],
               components: [row(button('kr-ticket:close', 'Fermer le ticket', 4))],
             } });
